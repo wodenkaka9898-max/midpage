@@ -8,52 +8,105 @@
 <meta property="og:title" content="小黄书 · 线路导航">
 <meta property="og:description" content="选择一条可用线路访问小黄书">
 <style>
-:root{--brand:#fed105;--brand-d:#a8880a;--ink:#1b1b1b;--bg:#fffbeb;--card:#fff;--line:#f0e2a8;--txt:#1b1b1b;--sub:#8a8577;--ok:#2f9e5f}
+/* 设计语言对齐新版 H5 落地页（square）+ Figma 中间页稿 3846:5926（402 宽基准，--k 等比缩放，桌面居中封顶）。 */
+:root{
+  --w:460px;                       /* 内容最大宽度（桌面封顶；手机为视口宽） */
+  --k:calc(min(100vw,var(--w))/402);
+  --bg:#f5f5f5; --ink:#1b1b1b; --brand:#fed105; --sub:#848484; --ok:#37da98; --card:#fff;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
-main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
-.brand{text-align:center;margin:8px 0 20px}
-.brand b{font-size:22px;color:var(--ink);background:var(--brand);padding:2px 12px;border-radius:8px}
-.brand span{display:block;color:var(--sub);font-size:13px;margin-top:8px}
-#notice{display:none;background:#fff4cf;color:#8a6d00;border:1px solid var(--brand);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:14px}
-.lines{display:flex;flex-direction:column;gap:12px}
-.line{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);border:1.5px solid var(--brand);border-radius:14px;padding:14px 16px;color:inherit;text-decoration:none;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.line[aria-disabled=true]{border-color:var(--line);opacity:.5;cursor:default;box-shadow:none}
-.line__name{font-size:16px;font-weight:600}
-.line__host{color:var(--sub);font-size:13px;margin-top:2px;word-break:break-all}
-.badge{flex:none;font-size:12px;padding:3px 10px;border-radius:12px;white-space:nowrap}
-.badge--rec{background:var(--brand);color:var(--ink);font-weight:600}
-.badge--ok{background:rgba(47,158,95,.12);color:var(--ok)}
-.badge--wait{background:#f3f0e2;color:var(--sub)}
-.badge--bad{background:#f3f0e2;color:var(--sub)}
-.tools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
-.tool{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--brand);border:1.5px solid var(--brand);border-radius:14px;padding:14px;color:var(--ink);text-decoration:none;font-size:15px;font-weight:600}
-.tip{margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--sub);font-size:13px}
-.tip b{color:var(--brand-d)}
-.slots{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 26px;margin-top:28px}
-.slot{display:flex;flex-direction:column;align-items:center;gap:8px;width:64px;color:var(--sub);text-decoration:none;font-size:12px}
-.slot__ic{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card)}
-.slot__ic svg{width:26px;height:26px;fill:var(--ink)}
-.slot__ic img{width:100%;height:100%;object-fit:cover}
-#empty{display:none;text-align:center;color:var(--sub);margin-top:24px}
-#empty button{margin-top:14px;padding:10px 26px;font-size:15px;border:0;border-radius:20px;background:var(--brand);color:var(--ink);font-weight:600}
-@media (min-width:640px){.tools{grid-template-columns:repeat(2,1fr)}}
+html,body{margin:0;padding:0;background:var(--bg);overflow-x:clip}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;color:var(--ink)}
+.wrap{max-width:var(--w);margin:0 auto;min-height:100vh;background:var(--bg);position:relative}
+
+/* 顶部 hero：黄色品牌底兜底（图加载不出也不塌），照片盖上、底部渐变压暗放标语 */
+.hero{position:relative;width:100%;height:calc(533*var(--k));background:var(--brand)}
+.hero__photo{position:absolute;inset:0 0 auto 0;height:calc(507*var(--k));
+  background:var(--hero,none) center top/cover no-repeat}
+.hero__fade{position:absolute;left:0;right:0;bottom:calc(97*var(--k));height:calc(150*var(--k));
+  background:linear-gradient(180deg,rgba(27,27,27,0) 0%,rgba(27,27,27,.72) 100%)}
+.hero__slogan{position:absolute;left:0;right:0;bottom:calc(109*var(--k));text-align:center;
+  color:#fff;font-size:calc(15*var(--k));font-weight:380;line-height:calc(20*var(--k));padding:0 calc(20*var(--k))}
+
+/* 内容面板：圆角上沿盖住 hero 底部 */
+.panel{position:relative;margin-top:calc(-97*var(--k));background:var(--bg);
+  border-radius:calc(33*var(--k)) calc(33*var(--k)) 0 0;padding:calc(27*var(--k)) calc(28*var(--k)) calc(24*var(--k))}
+
+#notice{display:none;background:#fff4cf;color:#8a6d00;border:1px solid var(--brand);
+  border-radius:calc(12*var(--k));padding:calc(10*var(--k)) calc(14*var(--k));margin-bottom:calc(14*var(--k));font-size:calc(13*var(--k))}
+
+/* 线路卡：白卡圆角 15，标题+徽章一行，host 一行，右侧 chevron */
+.lines{display:flex;flex-direction:column;gap:calc(6*var(--k))}
+.line{display:flex;align-items:center;gap:calc(10*var(--k));background:var(--card);
+  border-radius:calc(15*var(--k));padding:calc(14*var(--k)) calc(18*var(--k));
+  text-decoration:none;color:inherit;min-height:calc(65*var(--k))}
+.line[aria-disabled=true]{opacity:.55}
+.line__main{flex:1;min-width:0}
+.line__top{display:flex;align-items:center;gap:calc(10*var(--k))}
+.line__name{font-size:calc(15*var(--k));font-weight:520;line-height:calc(20*var(--k))}
+.line__host{margin-top:calc(3*var(--k));font-size:calc(12*var(--k));font-weight:380;color:var(--sub);word-break:break-all}
+.badge{flex:none;border-radius:999px;padding:calc(3*var(--k)) calc(13*var(--k));
+  font-size:calc(12*var(--k));line-height:calc(16*var(--k));color:#000}
+.badge--rec{background:var(--brand);font-weight:520}
+.badge--ok{background:var(--ok);font-weight:380}
+.badge--wait,.badge--bad{background:#e7e7e8;color:var(--sub);font-weight:380}
+.line__chev{flex:none;width:calc(9*var(--k));height:calc(15*var(--k));position:relative}
+.line[aria-disabled=true] .line__chev{display:none}
+.line__chev::before,.line__chev::after{content:"";position:absolute;left:0;width:calc(8*var(--k));height:calc(2.6*var(--k));
+  background:var(--ink);border-radius:999px}
+.line__chev::before{top:calc(4*var(--k));transform:rotate(45deg)}
+.line__chev::after{top:calc(8.4*var(--k));transform:rotate(-45deg)}
+
+/* 外联按钮：黑色胶囊，图标+文字横排，自动换行居中 */
+.slots{display:flex;flex-wrap:wrap;justify-content:center;gap:calc(11*var(--k));margin-top:calc(20*var(--k))}
+.slot{display:inline-flex;align-items:center;gap:calc(6*var(--k));background:var(--ink);color:#fff;
+  border-radius:999px;padding:calc(9*var(--k)) calc(18*var(--k));text-decoration:none;
+  font-size:calc(12*var(--k));font-weight:380}
+.slot svg{width:calc(17*var(--k));height:calc(17*var(--k));fill:#fff}
+
+.tip{margin-top:calc(18*var(--k));text-align:center;color:var(--sub);
+  font-size:calc(11*var(--k));font-weight:330;line-height:calc(16*var(--k))}
+.tip b{color:var(--ink);font-weight:520}
+.disclaimer{margin-top:calc(14*var(--k));text-align:center;color:var(--sub);
+  font-size:calc(10*var(--k));font-weight:330;line-height:calc(15*var(--k))}
+
+#empty{display:none;text-align:center;color:var(--sub);font-size:calc(13*var(--k));padding:calc(20*var(--k)) 0}
+#empty button{margin-top:calc(14*var(--k));padding:calc(11*var(--k)) calc(30*var(--k));border:0;
+  border-radius:999px;background:var(--brand);color:var(--ink);font-size:calc(15*var(--k));font-weight:520}
+
+/* 底部下载条：顶部细线 + 黄色圆角大按钮 */
+.dlbar{display:block;background:var(--bg);border-top:1px solid rgba(27,27,27,.06);
+  padding:calc(14*var(--k)) calc(51*var(--k)) calc(20*var(--k))}
+.dlbar__btn{display:flex;align-items:center;justify-content:center;gap:calc(8*var(--k));
+  height:calc(45*var(--k));background:var(--brand);color:var(--ink);border-radius:999px;
+  text-decoration:none;font-size:calc(15*var(--k));font-weight:520}
+.dlbar__btn svg{width:calc(20*var(--k));height:calc(20*var(--k));fill:var(--ink)}
+.dlbar[hidden]{display:none}
 </style>
 </head>
 <body>
-<main>
-  <div class="brand"><b>小黄书</b><span>选择一条线路访问</span></div>
-  <div id="notice"></div>
-  <div class="lines" id="lines"><div style="color:var(--sub);text-align:center">正在检测可用线路…</div></div>
-  <div id="empty">
-    <p>暂时没有可用线路。请开启 VPN 后重试，或稍后再试。</p>
-    <button type="button" onclick="location.reload()">重新检测</button>
+<div class="wrap">
+  <div class="hero">
+    <div class="hero__photo" id="hero-photo"></div>
+    <div class="hero__fade"></div>
+    <div class="hero__slogan">吃瓜讨论 · 交友约炮 · AI成人短剧 · 在线撩骚</div>
   </div>
-  <div class="tools" id="tools"></div>
-  <div class="slots" id="slots"></div>
-  <div class="tip"><b>请截图保存本页</b>，或收藏地址发布页，换线路时不迷路。</div>
-</main>
-<noscript><p style="text-align:center">请开启 JavaScript 后访问。</p></noscript>
+  <div class="panel">
+    <div id="notice"></div>
+    <div class="lines" id="lines"><div style="color:var(--sub);text-align:center;font-size:calc(13*var(--k))">正在检测可用线路…</div></div>
+    <div id="empty">
+      <p>暂时没有可用线路。请开启 VPN 后重试，或稍后再试。</p>
+      <button type="button" onclick="location.reload()">重新检测</button>
+    </div>
+    <div class="slots" id="slots"></div>
+    <div class="tip"><b>请截图保存本页</b>，或收藏地址发布页，换线路时不迷路。</div>
+    <div class="disclaimer">本站只为海外华人提供服务，非法律允许地区以及 18 岁以下用户禁止访问</div>
+  </div>
+  <a class="dlbar" id="dlbar" hidden>
+    <span class="dlbar__btn"><svg viewBox="0 0 24 24"><path d="M12 3v10m0 0l-4-4m4 4l4-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>下载小黄书APP</span>
+  </a>
+</div>
+<noscript><p style="text-align:center;padding:24px">请开启 JavaScript 后访问。</p></noscript>
 <script>window.__MIDPAGE_CFG__={"mirrors":["https://lindenhollow.b-cdn.net/endpoints.json","https://ashcombe.b-cdn.net/endpoints.json","https://finchmere.b-cdn.net/endpoints.json","https://wodenkaka9898-max.github.io/midpage/endpoints.json"],"midpageConfig":["https://lindenhollow.b-cdn.net/midpage.json","https://ashcombe.b-cdn.net/midpage.json","https://finchmere.b-cdn.net/midpage.json","https://wodenkaka9898-max.github.io/midpage/midpage.json"],"builtin":{"version":0,"api":["https://api.melonfeed.com"],"web":["https://m.melonfeed.com"],"entryRoots":["melonfeed.com"],"download":["https://dl.melonfeed.com/"]},"probeTimeoutMs":5000};</script>
 <script>/*
  * 中间页逻辑（47 号 §5.7b，260929）。
@@ -163,12 +216,13 @@ main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
     var box = el('lines'); box.innerHTML = '';
     if (!lines.length) { el('empty').style.display = 'block'; return; }
     lines.forEach(function (ln, idx) {
-      var target = buildUrl(ln.base);
       var a = document.createElement('a');
       a.className = 'line'; a.setAttribute('aria-disabled', 'true');
-      a.innerHTML = '<div><div class="line__name">线路 ' + (idx + 1) + '</div>'
+      a.innerHTML = '<div class="line__main">'
+        + '<div class="line__top"><span class="line__name">小黄书 · 线路 ' + (idx + 1) + '</span>'
+        + '<span class="badge badge--wait">检测中…</span></div>'
         + '<div class="line__host">' + esc(hostOf(ln.base)) + '</div></div>'
-        + '<span class="badge badge--wait">检测中…</span>';
+        + '<i class="line__chev" aria-hidden="true"></i>';
       box.appendChild(a);
       probeLine(ln, function (ok, usedLabel) {
         var badge = a.querySelector('.badge');
@@ -207,31 +261,28 @@ main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
   function hostOf(base, lbl) { return (origin(base.split('{label}').join(lbl || label)) || base).replace(/^https?:\/\//, ''); }
 
   // ── 工具：下载 App（探 download 各面取第一个通的）+ 福利导航等由 midpage.json 决定 ──
-  function renderTools(manifest, midcfg) {
-    var tools = el('tools'); tools.innerHTML = '';
+  function renderTools(manifest) {
     var dl = (manifest.download || [])[0];
-    if (dl) {
-      var a = document.createElement('a');
-      a.className = 'tool'; a.href = dl; a.textContent = '下载 App';
-      tools.appendChild(a);
-      // 探第一个可达的下载面
-      (manifest.download || []).reduce(function (p, url) {
-        return p.then(function (found) {
-          if (found) return found;
-          return probe(url.replace(/\/+$/, '')).then(function (ok) { if (ok) { a.href = url; return url; } return null; });
-        });
-      }, Promise.resolve(null));
-    }
+    if (!dl) return;
+    var bar = el('dlbar');
+    bar.href = dl; bar.removeAttribute('hidden');
+    // 探第一个可达的下载面
+    (manifest.download || []).reduce(function (p, url) {
+      return p.then(function (found) {
+        if (found) return found;
+        return probe(url.replace(/\/+$/, '')).then(function (ok) { if (ok) { bar.href = url; return url; } return null; });
+      });
+    }, Promise.resolve(null));
   }
 
   // ── 外联按钮槽位（midpage.json）：配了且启用才显示，自动重排 ──
   var ICONS = {
-    home: '<svg viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6H10v6H6v-9H3z"/></svg>',
-    telegram: '<svg viewBox="0 0 24 24"><path d="M21 4L3 11l5 2 2 6 3-4 5 4z"/></svg>',
-    twitter: '<svg viewBox="0 0 24 24"><path d="M3 3l7.5 10L3 21h2l6.5-7L17 21h4l-8-10.5L20.5 3h-2L13 9.5 8 3z"/></svg>',
-    qq: '<svg viewBox="0 0 24 24"><circle cx="12" cy="11" r="7"/><path d="M8 20l2-3h4l2 3z"/></svg>',
-    publish: '<svg viewBox="0 0 24 24"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h10v4H4z"/></svg>',
-    email: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 6l9 7 9-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+    home: '<svg viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6h-4v6H5v-9H2z"/></svg>',
+    telegram: '<svg viewBox="0 0 24 24"><path d="M21.5 4.3L2.9 11.4c-.9.3-.9 1.5 0 1.8l4.6 1.4 1.8 5.3c.2.6 1 .8 1.5.3l2.5-2.4 4.5 3.3c.6.4 1.4.1 1.6-.6L23 5.5c.2-.9-.7-1.6-1.5-1.2z"/></svg>',
+    twitter: '<svg viewBox="0 0 24 24"><path d="M3 3l7.5 10L3.3 21H6l6-6.4L16.7 21H21l-7.8-10.4L20.6 3H18l-5.4 5.8L8.3 3z"/></svg>',
+    qq: '<svg viewBox="0 0 24 24"><path d="M12 2c3 0 5 2.4 5 5.6 0 1.3.9 2 1.6 3.4.6 1.2 1.4 3.1 1.1 4.5-.2.9-1 .6-1.6-.3-.3.9-.9 1.7-1.6 2.3.7.3 1.2.7 1.2 1.2 0 .8-2.6 1.5-6 1.5s-6-.7-6-1.5c0-.5.5-.9 1.2-1.2-.7-.6-1.3-1.4-1.6-2.3-.6.9-1.4 1.2-1.6.3-.3-1.4.5-3.3 1.1-4.5C6.1 9.6 7 8.9 7 7.6 7 4.4 9 2 12 2z"/></svg>',
+    publish: '<svg viewBox="0 0 24 24"><path d="M4 4h16v3H4zm0 5h16v3H4zm0 5h11v3H4z"/></svg>',
+    email: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 6.5l8 6 8-6" fill="none" stroke="#fff" stroke-width="2"/></svg>'
   };
   function renderSlots(midcfg) {
     var box = el('slots'); box.innerHTML = '';
@@ -240,9 +291,7 @@ main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
       if (!s || s.enabled === false || !s.url || !/^https:\/\//.test(s.url)) return; // 配了才显示
       var a = document.createElement('a');
       a.className = 'slot'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
-      var ic = ICONS[s.type] || ICONS.home;
-      var icHtml = s.icon && /^https:\/\//.test(s.icon) ? '<img alt="" src="' + esc(s.icon) + '">' : ic;
-      a.innerHTML = '<span class="slot__ic">' + icHtml + '</span><span>' + esc(s.label || '') + '</span>';
+      a.innerHTML = (ICONS[s.type] || ICONS.home) + '<span>' + esc(s.label || '') + '</span>';
       box.appendChild(a);
     });
   }
@@ -268,6 +317,11 @@ main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
   }
 
   // ── 启动 ──
+  (function setHero() {
+    var img = new Image();
+    img.onload = function () { var e = el('hero-photo'); if (e) e.style.setProperty('--hero', 'url(hero.jpg)'); };
+    img.src = 'hero.jpg';   // 相对本页 origin；加载不出就保持黄色品牌底
+  })();
   renderNotice();
   Promise.all([
     fetchFirst(MIRRORS, validManifest),
@@ -278,7 +332,7 @@ main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
     if (!manifest || !manifest.api) { el('lines').innerHTML = ''; el('empty').style.display = 'block'; return; }
     reportMidpage(manifest);
     renderLines(linesFrom(manifest), manifest);
-    renderTools(manifest, midcfg);
+    renderTools(manifest);
     renderSlots(midcfg);
   });
 })();
