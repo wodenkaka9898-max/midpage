@@ -1,22 +1,35 @@
 {
-  "version": 1,
-  "updatedAt": "2026-09-29T00:00:00Z",
-  "api": ["https://api.melonfeed.com"],
-  "web": ["https://m.melonfeed.com"],
+  "version": 2,
+  "updatedAt": "2026-09-29T20:30:00Z",
+  "api": [
+    "https://api.melonfeed.com"
+  ],
+  "web": [
+    "https://m.melonfeed.com"
+  ],
   "notice": "",
   "mirrors": [
     "https://lindenhollow.b-cdn.net/endpoints.json",
     "https://ashcombe.b-cdn.net/endpoints.json",
     "https://finchmere.b-cdn.net/endpoints.json"
   ],
-  "download": ["https://dl.melonfeed.com/"],
-  "entryRoots": ["melonfeed.com"],
+  "download": [
+    "https://dl.melonfeed.com/"
+  ],
+  "entryRoots": [
+    "melonfeed.com"
+  ],
   "entries": [],
-  "lp": ["https://lp.melonfeed.com"],
+  "lp": [
+    "https://lp.melonfeed.com",
+    "https://quillbrook.b-cdn.net"
+  ],
   "midpage": [
     "https://lindenhollow.b-cdn.net/",
     "https://ashcombe.b-cdn.net/",
     "https://finchmere.b-cdn.net/"
   ],
-  "shortlink": ["https://s.melonfeed.com"]
+  "shortlink": [
+    "https://s.melonfeed.com"
+  ]
 }
