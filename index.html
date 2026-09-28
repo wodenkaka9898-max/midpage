@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>小黄书 · 线路导航</title>
+<meta property="og:title" content="小黄书 · 线路导航">
+<meta property="og:description" content="选择一条可用线路访问小黄书">
+<style>
+:root{--brand:#fed105;--brand-d:#a8880a;--ink:#1b1b1b;--bg:#fffbeb;--card:#fff;--line:#f0e2a8;--txt:#1b1b1b;--sub:#8a8577;--ok:#2f9e5f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:560px;margin:0 auto;padding:28px 18px 56px}
+.brand{text-align:center;margin:8px 0 20px}
+.brand b{font-size:22px;color:var(--ink);background:var(--brand);padding:2px 12px;border-radius:8px}
+.brand span{display:block;color:var(--sub);font-size:13px;margin-top:8px}
+#notice{display:none;background:#fff4cf;color:#8a6d00;border:1px solid var(--brand);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:14px}
+.lines{display:flex;flex-direction:column;gap:12px}
+.line{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);border:1.5px solid var(--brand);border-radius:14px;padding:14px 16px;color:inherit;text-decoration:none;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.line[aria-disabled=true]{border-color:var(--line);opacity:.5;cursor:default;box-shadow:none}
+.line__name{font-size:16px;font-weight:600}
+.line__host{color:var(--sub);font-size:13px;margin-top:2px;word-break:break-all}
+.badge{flex:none;font-size:12px;padding:3px 10px;border-radius:12px;white-space:nowrap}
+.badge--rec{background:var(--brand);color:var(--ink);font-weight:600}
+.badge--ok{background:rgba(47,158,95,.12);color:var(--ok)}
+.badge--wait{background:#f3f0e2;color:var(--sub)}
+.badge--bad{background:#f3f0e2;color:var(--sub)}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.tool{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--brand);border:1.5px solid var(--brand);border-radius:14px;padding:14px;color:var(--ink);text-decoration:none;font-size:15px;font-weight:600}
+.tip{margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;color:var(--sub);font-size:13px}
+.tip b{color:var(--brand-d)}
+.slots{display:flex;flex-wrap:wrap;justify-content:center;gap:20px 26px;margin-top:28px}
+.slot{display:flex;flex-direction:column;align-items:center;gap:8px;width:64px;color:var(--sub);text-decoration:none;font-size:12px}
+.slot__ic{width:52px;height:52px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card)}
+.slot__ic svg{width:26px;height:26px;fill:var(--ink)}
+.slot__ic img{width:100%;height:100%;object-fit:cover}
+#empty{display:none;text-align:center;color:var(--sub);margin-top:24px}
+#empty button{margin-top:14px;padding:10px 26px;font-size:15px;border:0;border-radius:20px;background:var(--brand);color:var(--ink);font-weight:600}
+@media (min-width:640px){.tools{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><b>小黄书</b><span>选择一条线路访问</span></div>
+  <div id="notice"></div>
+  <div class="lines" id="lines"><div style="color:var(--sub);text-align:center">正在检测可用线路…</div></div>
+  <div id="empty">
+    <p>暂时没有可用线路。请开启 VPN 后重试，或稍后再试。</p>
+    <button type="button" onclick="location.reload()">重新检测</button>
+  </div>
+  <div class="tools" id="tools"></div>
+  <div class="slots" id="slots"></div>
+  <div class="tip"><b>请截图保存本页</b>，或收藏地址发布页，换线路时不迷路。</div>
+</main>
+<noscript><p style="text-align:center">请开启 JavaScript 后访问。</p></noscript>
+<script>window.__MIDPAGE_CFG__={"mirrors":["https://lindenhollow.b-cdn.net/endpoints.json","https://ashcombe.b-cdn.net/endpoints.json","https://finchmere.b-cdn.net/endpoints.json","https://wodenkaka9898-max.github.io/midpage/endpoints.json"],"midpageConfig":["https://lindenhollow.b-cdn.net/midpage.json","https://ashcombe.b-cdn.net/midpage.json","https://finchmere.b-cdn.net/midpage.json"],"builtin":{"version":0,"api":["https://api.melonfeed.com"],"web":["https://m.melonfeed.com"],"entryRoots":["melonfeed.com"],"download":["https://dl.melonfeed.com/"]},"probeTimeoutMs":5000};</script>
+<script>/*
+ * 中间页逻辑（47 号 §5.7b，260929）。
+ *
+ * 🔴 硬约束：不依赖我方 API —— 它存在的意义就是主站/API 被封时还能用。
+ *   线路来源＝清单镜像 endpoints.json（§9.1 的 entryRoots/entries/lp/download/midpage/shortlink）
+ *   按钮与文案＝midpage.json（B7 由后台生成、发到同一批镜像；缺了就用内置兜底）。
+ *   唯一会碰 API 的是「直接打开中间页时上报一次 MIDPAGE 点击」——纯 best-effort beacon，
+ *   失败即丢、绝不阻塞渲染或跳转。
+ *
+ * Q1＝只列线路、用户自选，不自动跳转。
+ */
+(function () {
+  'use strict';
+  var CFG = window.__MIDPAGE_CFG__ || {};
+  var MIRRORS = CFG.mirrors || [];              // endpoints.json 镜像 URL（按序试，第一份合法的用）
+  var MIDCFG_MIRRORS = CFG.midpageConfig || []; // midpage.json 镜像 URL
+  var BUILTIN = CFG.builtin || {};              // 兜底清单（烤入，镜像全挂时用）
+  var PROBE_TIMEOUT = CFG.probeTimeoutMs || 5000;
+  var LABEL_KEY = 'mc.lineLabel', LABEL_RE = /^[a-z0-9]{4}-[a-z0-9]{4}$/;
+
+  var q = new URLSearchParams(location.search);
+  var PASS = ['promo', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lp', 'ref'];
+
+  function el(id) { return document.getElementById(id); }
+  function origin(u) { var m = /^https?:\/\/[^\/?#]+/.exec(u || ''); return m ? m[0] : null; }
+  function root(u) { var m = /^https?:\/\/[^\/?#]*?([a-z0-9-]+\.[a-z0-9-]+)$/i.exec(origin(u) || ''); return m ? m[1] : null; }
+
+  // ── 本设备固定线路标签（换根不换标签，保住登录态；契约 §9.2） ──
+  var label = null;
+  try { label = localStorage.getItem(LABEL_KEY); } catch (e) {}
+  if (!LABEL_RE.test(label || '')) {
+    label = genLabel();
+    try { localStorage.setItem(LABEL_KEY, label); } catch (e) {}
+  }
+  function genLabel() {
+    try {
+      var a = 'abcdefghijklmnopqrstuvwxyz0123456789', s = '', b = new Uint8Array(8);
+      (window.crypto || window.msCrypto).getRandomValues(b);
+      for (var i = 0; i < 8; i++) { s += a.charAt(b[i] % 36); if (i === 3) s += '-'; }
+      return s;
+    } catch (e) { return 'line-home'; }
+  }
+
+  // ── 透传参数：促销码（promo/code 都收）+ utm + ref + ?path= 深链 ──
+  function buildUrl(base, extraLabel) {
+    var origin_ = base.split('{label}').join(extraLabel || label);
+    var path = q.get('path') || '';
+    if (path && path.charAt(0) !== '/') path = '/' + path;
+    var u;
+    try { u = new URL(origin_.replace(/\/+$/, '') + (path || '/')); } catch (e) { return null; }
+    PASS.forEach(function (k) { var v = q.get(k); if (v) u.searchParams.set(k, v); });
+    var code = q.get('promo') || q.get('code'); if (code) u.searchParams.set('promo', code);
+    // 计数口径：中间页作为入口已（尽力）报过一次 ⇒ 给下一跳打 pc=1，H5 不再重复上报
+    u.searchParams.set('pc', '1');
+    return u.toString();
+  }
+
+  // ── 拉清单：按镜像顺序取第一份合法的；全挂用内置兜底 ──
+  function fetchFirst(urls, validate) {
+    var i = 0;
+    return new Promise(function (resolve) {
+      (function next() {
+        if (i >= urls.length) { resolve(null); return; }
+        var url = urls[i++];
+        var ctrl = window.AbortController ? new AbortController() : null;
+        var t = setTimeout(function () { ctrl && ctrl.abort(); }, PROBE_TIMEOUT);
+        fetch(url, { cache: 'no-store', signal: ctrl && ctrl.signal })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) { clearTimeout(t); var v = j && validate(j) ? j : null; v ? resolve(v) : next(); })
+          .catch(function () { clearTimeout(t); next(); });
+      })();
+    });
+  }
+
+  function validManifest(j) { return j && typeof j.version === 'number' && Array.isArray(j.api); }
+
+  // ── 探活：并发加载 <来源>/ping.gif，PROBE_TIMEOUT 内没加载出来算不通 ──
+  function probe(o) {
+    return new Promise(function (res) {
+      if (!o) { res(false); return; }
+      var done = false, img = new Image();
+      var t = setTimeout(function () { if (!done) { done = true; res(false); } }, PROBE_TIMEOUT);
+      img.onload = function () { if (!done) { done = true; clearTimeout(t); res(true); } };
+      img.onerror = function () { if (!done) { done = true; clearTimeout(t); res(false); } };
+      img.src = o + '/ping.gif?_=' + Date.now();
+    });
+  }
+
+  // ── 线路列表 = entryRoots(拼标签) + entries，顺序即优先级 ──
+  function linesFrom(m) {
+    var out = [];
+    (m.entryRoots || []).forEach(function (r) { out.push({ base: 'https://{label}.' + r, isRoot: true, root: r }); });
+    (m.entries || []).forEach(function (e) { out.push({ base: e, isRoot: false }); });
+    // 兜底：清单没给线路时至少给 web 候选（老字段）
+    if (!out.length) (m.web || []).forEach(function (w) { out.push({ base: w, isRoot: false }); });
+    return out;
+  }
+
+  function renderNotice() {
+    if (q.get('slink') === 'expired') {
+      var n = el('notice'); n.textContent = '你访问的活动链接已失效，请从下面选择线路进入小黄书。'; n.style.display = 'block';
+    }
+  }
+
+  function renderLines(lines, manifest) {
+    var box = el('lines'); box.innerHTML = '';
+    if (!lines.length) { el('empty').style.display = 'block'; return; }
+    lines.forEach(function (ln, idx) {
+      var target = buildUrl(ln.base);
+      var a = document.createElement('a');
+      a.className = 'line'; a.setAttribute('aria-disabled', 'true');
+      a.innerHTML = '<div><div class="line__name">线路 ' + (idx + 1) + '</div>'
+        + '<div class="line__host">' + esc(hostOf(ln.base)) + '</div></div>'
+        + '<span class="badge badge--wait">检测中…</span>';
+      box.appendChild(a);
+      probeLine(ln, function (ok, usedLabel) {
+        var badge = a.querySelector('.badge');
+        if (ok) {
+          a.href = buildUrl(ln.base, usedLabel);
+          a.removeAttribute('aria-disabled');
+          badge.className = 'badge ' + (firstOk ? 'badge--ok' : 'badge--rec');
+          badge.textContent = firstOk ? '线路正常' : '推荐访问';
+          firstOk = true;
+          a.querySelector('.line__host').textContent = hostOf(ln.base, usedLabel);
+        } else {
+          badge.className = 'badge badge--bad'; badge.textContent = '暂不可用';
+        }
+        maybeEmpty();
+      });
+    });
+  }
+
+  var firstOk = false, pending = 0, anyOk = false;
+  function probeLine(ln, cb) {
+    pending++;
+    var lbl = label;
+    probe(origin(ln.base.split('{label}').join(lbl))).then(function (ok) {
+      if (ok) { anyOk = true; pending--; cb(true, lbl); return; }
+      // 泛解析线路：同根换一个新标签再探一次（应对按主机名封锁）
+      if (ln.isRoot) {
+        var lbl2 = genLabel();
+        probe(origin(ln.base.split('{label}').join(lbl2))).then(function (ok2) {
+          if (ok2) anyOk = true; pending--; cb(ok2, lbl2);
+        });
+      } else { pending--; cb(false, lbl); }
+    });
+  }
+  function maybeEmpty() { if (pending === 0 && !anyOk) el('empty').style.display = 'block'; }
+
+  function hostOf(base, lbl) { return (origin(base.split('{label}').join(lbl || label)) || base).replace(/^https?:\/\//, ''); }
+
+  // ── 工具：下载 App（探 download 各面取第一个通的）+ 福利导航等由 midpage.json 决定 ──
+  function renderTools(manifest, midcfg) {
+    var tools = el('tools'); tools.innerHTML = '';
+    var dl = (manifest.download || [])[0];
+    if (dl) {
+      var a = document.createElement('a');
+      a.className = 'tool'; a.href = dl; a.textContent = '下载 App';
+      tools.appendChild(a);
+      // 探第一个可达的下载面
+      (manifest.download || []).reduce(function (p, url) {
+        return p.then(function (found) {
+          if (found) return found;
+          return probe(url.replace(/\/+$/, '')).then(function (ok) { if (ok) { a.href = url; return url; } return null; });
+        });
+      }, Promise.resolve(null));
+    }
+  }
+
+  // ── 外联按钮槽位（midpage.json）：配了且启用才显示，自动重排 ──
+  var ICONS = {
+    home: '<svg viewBox="0 0 24 24"><path d="M12 3l9 8h-3v9h-4v-6H10v6H6v-9H3z"/></svg>',
+    telegram: '<svg viewBox="0 0 24 24"><path d="M21 4L3 11l5 2 2 6 3-4 5 4z"/></svg>',
+    twitter: '<svg viewBox="0 0 24 24"><path d="M3 3l7.5 10L3 21h2l6.5-7L17 21h4l-8-10.5L20.5 3h-2L13 9.5 8 3z"/></svg>',
+    qq: '<svg viewBox="0 0 24 24"><circle cx="12" cy="11" r="7"/><path d="M8 20l2-3h4l2 3z"/></svg>',
+    publish: '<svg viewBox="0 0 24 24"><path d="M4 4h16v4H4zM4 10h16v4H4zM4 16h10v4H4z"/></svg>',
+    email: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 6l9 7 9-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+  };
+  function renderSlots(midcfg) {
+    var box = el('slots'); box.innerHTML = '';
+    var slots = (midcfg && midcfg.slots) || [];
+    slots.forEach(function (s) {
+      if (!s || s.enabled === false || !s.url || !/^https:\/\//.test(s.url)) return; // 配了才显示
+      var a = document.createElement('a');
+      a.className = 'slot'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
+      var ic = ICONS[s.type] || ICONS.home;
+      var icHtml = s.icon && /^https:\/\//.test(s.icon) ? '<img alt="" src="' + esc(s.icon) + '">' : ic;
+      a.innerHTML = '<span class="slot__ic">' + icHtml + '</span><span>' + esc(s.label || '') + '</span>';
+      box.appendChild(a);
+    });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ── best-effort 上报一次 MIDPAGE 点击（直接打开时；pc=1 说明上游已报，不再报） ──
+  function reportMidpage(manifest) {
+    var code = q.get('promo') || q.get('code');
+    if (!code || q.get('pc') === '1' || q.get('via') === 's') return;
+    var api = (manifest.api || [])[0];
+    if (!api) return;
+    try {
+      fetch(api + '/api/v1/promo-links/click', {
+        method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, source: 'MIDPAGE' })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  // ── 启动 ──
+  renderNotice();
+  Promise.all([
+    fetchFirst(MIRRORS, validManifest),
+    fetchFirst(MIDCFG_MIRRORS, function (j) { return j && Array.isArray(j.slots); })
+  ]).then(function (r) {
+    var manifest = r[0] || BUILTIN;
+    var midcfg = r[1] || CFG.builtinMidpage || null;
+    if (!manifest || !manifest.api) { el('lines').innerHTML = ''; el('empty').style.display = 'block'; return; }
+    reportMidpage(manifest);
+    renderLines(linesFrom(manifest), manifest);
+    renderTools(manifest, midcfg);
+    renderSlots(midcfg);
+  });
+})();
+</script>
+</body>
+</html>
