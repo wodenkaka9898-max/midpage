@@ -75,7 +75,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
   border-radius:999px;background:var(--brand);color:var(--ink);font-size:calc(15*var(--k));font-weight:520}
 
 /* 底部下载条：顶部细线 + 黄色圆角大按钮 */
-.dlbar{display:block;background:var(--bg);border-top:1px solid rgba(27,27,27,.06);
+.dlbar{display:block;text-decoration:none;color:inherit;background:var(--bg);border-top:1px solid rgba(27,27,27,.06);
   padding:calc(14*var(--k)) calc(51*var(--k)) calc(20*var(--k))}
 .dlbar__btn{display:flex;align-items:center;justify-content:center;gap:calc(8*var(--k));
   height:calc(45*var(--k));background:var(--brand);color:var(--ink);border-radius:999px;
@@ -126,10 +126,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
   var MIDCFG_MIRRORS = CFG.midpageConfig || []; // midpage.json 镜像 URL
   var BUILTIN = CFG.builtin || {};              // 兜底清单（烤入，镜像全挂时用）
   var PROBE_TIMEOUT = CFG.probeTimeoutMs || 5000;
+  var REPORT_TIMEOUT = CFG.reportTimeoutMs || 3000;  // 单个 API 线路上报的等待上限，超时即换下一条
   var LABEL_KEY = 'mc.lineLabel', LABEL_RE = /^[a-z0-9]{4}-[a-z0-9]{4}$/;
+  // 上报去重用的两个键，与落地页 src/attribution.js 逐字相同（中间页与落地页不同源，同名不会互相干扰）：
+  //   localStorage `mlp_vid` = 浏览器标识（服务端按它做「同一浏览器同一短码 24h 只 +1」）
+  //   sessionStorage `melon.attribution.clicked:<码>` = 本标签页已报过（刷新 / 「重新检测」不再报）
+  var VID_KEY = 'mlp_vid', CLICKED_PREFIX = 'melon.attribution.clicked:';
 
   var q = new URLSearchParams(location.search);
   var PASS = ['promo', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lp', 'ref'];
+  // 🔴 审计 F-M3：URL 没带 ref 时，把本页的 document.referrer 当 ref 传给下一跳 —— 不传的话 H5 只能记到
+  //    自己的 document.referrer ＝ 中间页，真实外站来源丢失。口径同短链解析页（ShortLinkResolverPage）：
+  //    URL 已有 ref 不覆盖；referrer 是本页自身（刷新 / 站内）不算；截断 512。
+  //    ⚠️ 带 pc=1 进来（上游 LP 没拿到 referrer 时）同样补：补上的是 LP 的来源，与改版前 LP 直链 H5 时 H5 看到的一致。
+  var REF = (function () {
+    var r = q.get('ref');
+    if (r) return r;
+    var d = ''; try { d = document.referrer || ''; } catch (e) {}
+    if (!d || d.indexOf(location.origin + '/') === 0) return '';
+    return d.slice(0, 512);
+  })();
 
   function el(id) { return document.getElementById(id); }
   function origin(u) { var m = /^https?:\/\/[^\/?#]+/.exec(u || ''); return m ? m[0] : null; }
@@ -158,27 +174,67 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     if (path && path.charAt(0) !== '/') path = '/' + path;
     var u;
     try { u = new URL(origin_.replace(/\/+$/, '') + (path || '/')); } catch (e) { return null; }
+    return withParams(u);
+  }
+  // 线路链接与下载链接共用同一套参数（promo / utm_* / lp / ref + pc=1）
+  function withParams(u) {
     PASS.forEach(function (k) { var v = q.get(k); if (v) u.searchParams.set(k, v); });
+    if (REF) u.searchParams.set('ref', REF);
     var code = q.get('promo') || q.get('code'); if (code) u.searchParams.set('promo', code);
     // 计数口径：中间页作为入口已（尽力）报过一次 ⇒ 给下一跳打 pc=1，H5 不再重复上报
     u.searchParams.set('pc', '1');
     return u.toString();
   }
+  // 🔴 审计 F-M4：「下载 App」原先跳裸下载地址 ⇒ 下载页的 DL_PAGE 上报与往主站的透传全丢了码。
+  //    保留下载面自身的路径与 query，只叠加同一套参数。下载页不认 pc=1（见 melon-circle-app deploy/dl-index-*.html：
+  //    带 promo 就报 DL_PAGE），这与 LP「下载」按钮带 promo+pc=1 进下载页的现行为一致 —— 下载页是一级「落地」。
+  function dlUrl(url) { try { return withParams(new URL(url)); } catch (e) { return url; } }
 
-  // ── 拉清单：按镜像顺序取第一份合法的；全挂用内置兜底 ──
-  function fetchFirst(urls, validate) {
-    var i = 0;
+  // ── 拉清单 / 按钮配置：同源镜像优先 → 其余镜像并发、取先到的合法那份；全挂返回 null（调用方用内置兜底） ──
+  // 🔴 审计二轮 F2-M4：原先按固定镜像顺序逐面试、每面 PROBE_TIMEOUT(5s) ⇒ 从 GitHub 面打开而 Bunny 三面被丢包时
+  //    要干等 15 秒才出线路。现在：
+  //    ① 先取「配置里与本页同源」的那条镜像 —— 页面本身就是从这一面加载成功的，最可能通。
+  //       ⚠️ 取的是**配置里的**同源 URL，不是盲读相对路径 ./endpoints.json：同一个 GitHub 主机的
+  //       /midpage/endpoints.json 是 dev 清单、根下 /endpoints.json 是 prod 清单，盲读相对路径会让放错面的页读错环境。
+  //    ② 同源那条失败（非 2xx / 非法 / 网络错）立刻、或 HEDGE_MS 内还没回就，**并发**拉其余镜像，第一份合法的即用。
+  //       选并发不选「按序逐面」：中间页被用到时恰是有面被封的时候，按序＝把黑洞的超时一面面叠加；
+  //       并发只多几个几 KB 的 GET。代价是不再保证「靠前的镜像优先」——各面由同一次同步发布、内容相同，
+  //       只在发布那几分钟可能取到旧一版，中间页不持久化清单、下次打开即更正。
+  //    ③ 所有面都失败 ⇒ 立即 resolve(null)，不等剩余超时。
+  var HEDGE_MS = CFG.hedgeMs || 1500;
+  function fetchJson(url) {
     return new Promise(function (resolve) {
-      (function next() {
-        if (i >= urls.length) { resolve(null); return; }
-        var url = urls[i++];
-        var ctrl = window.AbortController ? new AbortController() : null;
-        var t = setTimeout(function () { ctrl && ctrl.abort(); }, PROBE_TIMEOUT);
-        fetch(url, { cache: 'no-store', signal: ctrl && ctrl.signal })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (j) { clearTimeout(t); var v = j && validate(j) ? j : null; v ? resolve(v) : next(); })
-          .catch(function () { clearTimeout(t); next(); });
-      })();
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var t = setTimeout(function () { ctrl && ctrl.abort(); resolve(null); }, PROBE_TIMEOUT);
+      fetch(url, { cache: 'no-store', signal: ctrl && ctrl.signal })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { clearTimeout(t); resolve(j); }, function () { clearTimeout(t); resolve(null); });
+    });
+  }
+  function sameOrigin(u) { return origin(u) === location.origin; }
+  function fetchFast(urls, validate) {
+    var first = urls.filter(sameOrigin), rest = urls.filter(function (u) { return !sameOrigin(u); });
+    return new Promise(function (resolve) {
+      var done = false, pending = 0, restLaunched = false, hedge = null;
+      function settle(v) { if (done) return; done = true; clearTimeout(hedge); resolve(v); }
+      function go(url) {
+        pending++;
+        fetchJson(url).then(function (j) {
+          pending--;
+          if (done) return;
+          if (j && validate(j)) { settle(j); return; }
+          if (!restLaunched) launchRest();
+          else if (pending === 0) settle(null);
+        });
+      }
+      function launchRest() {
+        if (restLaunched || done) return;
+        restLaunched = true;
+        rest.forEach(go);
+        if (pending === 0) settle(null);
+      }
+      if (first.length) { hedge = setTimeout(launchRest, HEDGE_MS); first.forEach(go); }
+      else launchRest();
     });
   }
 
@@ -224,10 +280,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
         + '<div class="line__host">' + esc(hostOf(ln.base)) + '</div></div>'
         + '<i class="line__chev" aria-hidden="true"></i>';
       box.appendChild(a);
+      // 🔴 审计 F-M5：旧标签探不通、换新标签探通时，用户**真点进去**才把新标签写回 localStorage ——
+      //    不写回的话下次打开又先试旧标签、又落到新来源，每次都要重登（契约 §9.2「保住登录态」落空）。
+      //    ⚠️ 不在探通时就写：旧标签可能只是一时抖动（5 秒内没回），那时覆盖会把旧来源上的登录态白白丢掉。
+      //    点哪条写哪条的标签（含点回旧标签那条），auxclick 覆盖中键 / 新标签页打开。
+      var adopt = function () {
+        var l = a.getAttribute('data-label');
+        if (!a.getAttribute('href') || !l || l === label || !LABEL_RE.test(l)) return;
+        label = l;
+        try { localStorage.setItem(LABEL_KEY, l); } catch (e) {}
+      };
+      a.addEventListener('click', adopt);
+      a.addEventListener('auxclick', adopt);
       probeLine(ln, function (ok, usedLabel) {
         var badge = a.querySelector('.badge');
         if (ok) {
           a.href = buildUrl(ln.base, usedLabel);
+          // 🔴 审计二轮 低危a：只有泛解析线路才有「标签」可采纳。直连线路也写的话，写进去的是探测时的旧标签 ⇒
+          //    换过新标签、bfcache 恢复后再点直连线路，adopt 会把旧标签写回 mc.lineLabel。
+          if (ln.isRoot) a.setAttribute('data-label', usedLabel);
           a.removeAttribute('aria-disabled');
           badge.className = 'badge ' + (firstOk ? 'badge--ok' : 'badge--rec');
           badge.textContent = firstOk ? '线路正常' : '推荐访问';
@@ -265,12 +336,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     var dl = (manifest.download || [])[0];
     if (!dl) return;
     var bar = el('dlbar');
-    bar.href = dl; bar.removeAttribute('hidden');
+    bar.href = dlUrl(dl); bar.removeAttribute('hidden');
     // 探第一个可达的下载面
     (manifest.download || []).reduce(function (p, url) {
       return p.then(function (found) {
         if (found) return found;
-        return probe(url.replace(/\/+$/, '')).then(function (ok) { if (ok) { bar.href = url; return url; } return null; });
+        return probe(url.replace(/\/+$/, '')).then(function (ok) { if (ok) { bar.href = dlUrl(url); return url; } return null; });
       });
     }, Promise.resolve(null));
   }
@@ -302,18 +373,70 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     });
   }
 
+  // ── 浏览器标识（同落地页 attribution.js 的 visitorId()）：拿不到 storage 就不带，服务端退回 IP+UA ──
+  function visitorId() {
+    try {
+      var v = localStorage.getItem(VID_KEY);
+      if (!v) {
+        v = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : 'v-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(VID_KEY, v);
+      }
+      return v;
+    } catch (e) { return ''; }
+  }
+
   // ── best-effort 上报一次 MIDPAGE 点击（直接打开时；pc=1 说明上游已报，不再报） ──
+  // 🔴 审计 F-M1：必须带 visitorId + 会话去重标记。不带时服务端只能按 IP+UA 判重，而经 CDN 回源看到的
+  //    是轮换的边缘 IP ⇒ 刷新一次、点一次「重新检测」（= location.reload）就多计一次。
+  // 🔴 审计 F-M2：按 manifest.api 顺序逐条试，第一条 2xx 即停。只打 api[0] 时，主 API 不通（恰是中间页
+  //    被用到的场景）这次入口就在任何来源都是 0 —— 下一跳已带 pc=1，H5 也不会补。
+  //    ⚠️ 时序取舍：尝试链靠 then 推进，页面一卸载（用户点了线路）后续就不会再跑。在途的那条有 keepalive
+  //    会继续发完；另在 pagehide 时对「下一条还没试的」补发一次 keepalive（只补一条，不是全部）——
+  //    在途那条若其实只是慢、最终也成功，服务端会多一行明细，但带同一 visitorId ⇒ 标 duplicated、不 +1。
+  //    绝不为上报阻塞渲染或跳转。
   function reportMidpage(manifest) {
     var code = q.get('promo') || q.get('code');
     if (!code || q.get('pc') === '1' || q.get('via') === 's') return;
-    var api = (manifest.api || [])[0];
-    if (!api) return;
+    var apis = (manifest.api || []).filter(function (a) { return typeof a === 'string' && a; });
+    if (!apis.length) return;
+    var sk = CLICKED_PREFIX + code;
+    try { if (sessionStorage.getItem(sk)) return; } catch (e) {}   // 隐私模式禁 storage ⇒ 不去重，宁多勿漏
+    var body = JSON.stringify({ code: code, source: 'MIDPAGE', visitorId: visitorId() || undefined });
+    var i = 0, done = false;
+
+    function send(base, timeoutMs) {
+      return new Promise(function (res) {
+        var ctrl = timeoutMs && window.AbortController ? new AbortController() : null;
+        var t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+        try {
+          fetch(base.replace(/\/+$/, '') + '/api/v1/promo-links/click', {
+            method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+            body: body, signal: ctrl ? ctrl.signal : undefined
+          }).then(function (r) { clearTimeout(t); res(!!(r && r.ok)); },
+                  function () { clearTimeout(t); res(false); });
+        } catch (e) { clearTimeout(t); res(false); }
+      });
+    }
+    function next() {
+      if (done || i >= apis.length) return;
+      send(apis[i++], REPORT_TIMEOUT).then(function (ok) {
+        if (done) return;
+        if (ok) {
+          done = true;
+          // 标记只在服务端确认收到（2xx）后写：没发成功就占位，本会话再回来永远补不上（落地页同款教训）
+          try { sessionStorage.setItem(sk, '1'); } catch (e) {}
+        } else next();
+      });
+    }
     try {
-      fetch(api + '/api/v1/promo-links/click', {
-        method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code, source: 'MIDPAGE' })
-      }).catch(function () {});
+      window.addEventListener('pagehide', function () {
+        if (done || i >= apis.length) return;
+        done = true;
+        send(apis[i++], 0);   // 卸载中：不设超时（abort 定时器随页面一起消失），交给 keepalive
+      });
     } catch (e) {}
+    next();
   }
 
   // ── 启动 ──
@@ -323,18 +446,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     img.src = 'hero.jpg';   // 相对本页 origin；加载不出就保持黄色品牌底
   })();
   renderNotice();
-  Promise.all([
-    fetchFirst(MIRRORS, validManifest),
-    fetchFirst(MIDCFG_MIRRORS, function (j) { return j && Array.isArray(j.slots); })
-  ]).then(function (r) {
-    var manifest = r[0] || BUILTIN;
-    var midcfg = r[1] || CFG.builtinMidpage || null;
+  // 🔴 审计二轮 F2-M4：线路渲染**不等**按钮配置（原先 Promise.all 两份都到才渲染 ⇒ midpage.json 被丢包时线路也跟着等）。
+  //    两份各拉各的：清单到了就出线路，按钮配置到了再补渲染按钮区。
+  var midcfgP = fetchFast(MIDCFG_MIRRORS, function (j) { return j && Array.isArray(j.slots); });
+  fetchFast(MIRRORS, validManifest).then(function (m) {
+    var manifest = m || BUILTIN;
     if (!manifest || !manifest.api) { el('lines').innerHTML = ''; el('empty').style.display = 'block'; return; }
     reportMidpage(manifest);
     renderLines(linesFrom(manifest), manifest);
     renderTools(manifest);
-    renderSlots(midcfg);
   });
+  midcfgP.then(function (c) { renderSlots(c || CFG.builtinMidpage || null); });
 })();
 </script>
 </body>
