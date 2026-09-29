@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "updatedAt": "2026-09-29T20:30:00Z",
+  "version": 3,
+  "updatedAt": "2026-09-29T07:30:00Z",
   "api": [
     "https://api.melonfeed.com"
   ],
@@ -14,7 +14,9 @@
     "https://finchmere.b-cdn.net/endpoints.json"
   ],
   "download": [
-    "https://dl.melonfeed.com/"
+    "https://dl.melonfeed.com/",
+    "https://thornwick.b-cdn.net/",
+    "https://melon-dl.b-cdn.net/"
   ],
   "entryRoots": [
     "melonfeed.com"
