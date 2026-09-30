@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "updatedAt": "2026-09-29T07:30:00Z",
+  "version": 4,
+  "updatedAt": "2026-09-30T03:47:27Z",
   "api": [
     "https://api.melonfeed.com"
   ],
@@ -17,9 +17,6 @@
     "https://dl.melonfeed.com/",
     "https://thornwick.b-cdn.net/",
     "https://melon-dl.b-cdn.net/"
-  ],
-  "entryRoots": [
-    "melonfeed.com"
   ],
   "entries": [],
   "lp": [
