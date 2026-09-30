@@ -41,6 +41,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
   border-radius:calc(15*var(--k));padding:calc(14*var(--k)) calc(18*var(--k));
   text-decoration:none;color:inherit;min-height:calc(65*var(--k))}
 .line[aria-disabled=true]{opacity:.55}
+.line[hidden]{display:none}
+/* 「更多线路（N）」：折叠其余线路（260930 方案 A）——弱化成文字按钮，不与线路卡抢视觉 */
+.lines__more{display:block;margin:calc(8*var(--k)) auto 0;padding:calc(6*var(--k)) calc(14*var(--k));background:none;border:0;
+  color:var(--sub);font-size:calc(13*var(--k));cursor:pointer}
+.lines__more[hidden]{display:none}
 .line__main{flex:1;min-width:0}
 .line__top{display:flex;align-items:center;gap:calc(10*var(--k))}
 .line__name{font-size:calc(15*var(--k));font-weight:520;line-height:calc(20*var(--k))}
@@ -94,6 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
   <div class="panel">
     <div id="notice"></div>
     <div class="lines" id="lines"><div style="color:var(--sub);text-align:center;font-size:calc(13*var(--k))">正在检测可用线路…</div></div>
+    <button type="button" class="lines__more" id="linesMore" hidden></button>
     <div id="empty">
       <p>暂时没有可用线路。请开启 VPN 后重试，或稍后再试。</p>
       <button type="button" onclick="location.reload()">重新检测</button>
@@ -268,12 +274,46 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     }
   }
 
+  // ── 线路只展示前 VISIBLE_LINES 条「没被判为不通」的（260930 用户定方案 A）──
+  //    清单里预备多少条都行，页面长度不变、按钮与下载不被挤出首屏（Figma 稿即 3 条）。
+  //    取法：按清单顺序（顺序即优先级），探不通的掉出、由后面的补上；其余收进「更多线路（N）」，照常探活。
+  //    DOM 始终保持清单顺序、只用 hidden 控制显示 ⇒ 线路元素与事件不因重排而重建。
+  //    全部不通 ⇒ 全部展开（配合「暂无线路」提示，让人看到每条都试过了）。
+  var VISIBLE_LINES = CFG.visibleLines || 3, linesExpanded = false, LINE_EL = [];
+  function layoutLines() {
+    var allBad = pending === 0 && !anyOk && LINE_EL.length > 0;
+    var primary = 0, n = 0, rec = false, more = 0;
+    LINE_EL.forEach(function (a) {
+      var st = a.getAttribute('data-state');
+      var inPrimary = st !== 'bad' && primary < VISIBLE_LINES;
+      if (inPrimary) primary++; else more++;
+      var show = allBad || linesExpanded || inPrimary;
+      a.hidden = !show;
+      if (show) a.querySelector('.line__name').textContent = '小黄书 · 线路 ' + (++n);
+      if (st === 'ok') {
+        // 推荐＝展示区里按优先级第一条通的（原先是「时间上最先探通」，可能落在折叠区里、用户看不到）
+        var isRec = inPrimary && !rec;
+        if (isRec) rec = true;
+        var badge = a.querySelector('.badge');
+        badge.className = 'badge ' + (isRec ? 'badge--rec' : 'badge--ok');
+        badge.textContent = isRec ? '推荐访问' : '线路正常';
+      }
+    });
+    var btn = el('linesMore');
+    if (btn) {
+      btn.hidden = allBad || more === 0;
+      btn.textContent = linesExpanded ? '收起' : '更多线路（' + more + '）';
+    }
+  }
+
   function renderLines(lines, manifest) {
     var box = el('lines'); box.innerHTML = '';
+    LINE_EL = [];
     if (!lines.length) { el('empty').style.display = 'block'; return; }
     lines.forEach(function (ln, idx) {
       var a = document.createElement('a');
-      a.className = 'line'; a.setAttribute('aria-disabled', 'true');
+      a.className = 'line'; a.setAttribute('aria-disabled', 'true'); a.setAttribute('data-state', 'wait');
+      LINE_EL.push(a);
       a.innerHTML = '<div class="line__main">'
         + '<div class="line__top"><span class="line__name">小黄书 · 线路 ' + (idx + 1) + '</span>'
         + '<span class="badge badge--wait">检测中…</span></div>'
@@ -300,19 +340,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
           //    换过新标签、bfcache 恢复后再点直连线路，adopt 会把旧标签写回 mc.lineLabel。
           if (ln.isRoot) a.setAttribute('data-label', usedLabel);
           a.removeAttribute('aria-disabled');
-          badge.className = 'badge ' + (firstOk ? 'badge--ok' : 'badge--rec');
-          badge.textContent = firstOk ? '线路正常' : '推荐访问';
-          firstOk = true;
+          a.setAttribute('data-state', 'ok');   // 徽章（推荐 / 正常）由 layoutLines 按展示顺序统一定
           a.querySelector('.line__host').textContent = hostOf(ln.base, usedLabel);
         } else {
+          a.setAttribute('data-state', 'bad');
           badge.className = 'badge badge--bad'; badge.textContent = '暂不可用';
         }
+        layoutLines();
         maybeEmpty();
       });
     });
+    layoutLines();
   }
 
-  var firstOk = false, pending = 0, anyOk = false;
+  var pending = 0, anyOk = false;
   function probeLine(ln, cb) {
     pending++;
     var lbl = label;
@@ -446,6 +487,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     img.src = 'hero.jpg';   // 相对本页 origin；加载不出就保持黄色品牌底
   })();
   renderNotice();
+  (function () {
+    var btn = el('linesMore');
+    if (btn) btn.addEventListener('click', function () { linesExpanded = !linesExpanded; layoutLines(); });
+  })();
   // 🔴 审计二轮 F2-M4：线路渲染**不等**按钮配置（原先 Promise.all 两份都到才渲染 ⇒ midpage.json 被丢包时线路也跟着等）。
   //    两份各拉各的：清单到了就出线路，按钮配置到了再补渲染按钮区。
   var midcfgP = fetchFast(MIDCFG_MIRRORS, function (j) { return j && Array.isArray(j.slots); });
