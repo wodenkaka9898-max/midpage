@@ -68,6 +68,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
   border-radius:999px;padding:calc(9*var(--k)) calc(18*var(--k));text-decoration:none;
   font-size:calc(12*var(--k));font-weight:380}
 .slot svg{width:calc(17*var(--k));height:calc(17*var(--k));fill:#fff}
+.slot__addr{opacity:.72;font-size:calc(11*var(--k));word-break:break-all}
+.toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:80%;z-index:9;
+  background:#2a2a2a;box-shadow:0 calc(4*var(--k)) calc(16*var(--k)) rgba(0,0,0,.25);color:#fff;border-radius:calc(8*var(--k));padding:calc(9*var(--k)) calc(14*var(--k));
+  font-size:calc(13*var(--k));text-align:center;word-break:break-all}
+.toast[hidden]{display:none}
 
 .tip{margin-top:calc(18*var(--k));text-align:center;color:var(--sub);
   font-size:calc(11*var(--k));font-weight:330;line-height:calc(16*var(--k))}
@@ -112,6 +117,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     <span class="dlbar__btn"><svg viewBox="0 0 24 24"><path d="M12 3v10m0 0l-4-4m4 4l4-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>下载小黄书APP</span>
   </a>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <noscript><p style="text-align:center;padding:24px">请开启 JavaScript 后访问。</p></noscript>
 <script>window.__MIDPAGE_CFG__={"mirrors":["https://lindenhollow.b-cdn.net/endpoints.json","https://ashcombe.b-cdn.net/endpoints.json","https://finchmere.b-cdn.net/endpoints.json","https://wodenkaka9898-max.github.io/midpage/endpoints.json"],"midpageConfig":["https://lindenhollow.b-cdn.net/midpage.json","https://ashcombe.b-cdn.net/midpage.json","https://finchmere.b-cdn.net/midpage.json","https://wodenkaka9898-max.github.io/midpage/midpage.json"],"builtin":{"version":0,"api":["https://api.melonfeed.com"],"web":["https://m.melonfeed.com"],"entryRoots":["melonfeed.com"],"download":["https://dl.melonfeed.com/"]},"probeTimeoutMs":5000};</script>
 <script>/*
@@ -396,16 +402,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK S
     publish: '<svg viewBox="0 0 24 24"><path d="M4 4h16v3H4zm0 5h16v3H4zm0 5h11v3H4z"/></svg>',
     email: '<svg viewBox="0 0 24 24"><path d="M3 5h18v14H3z" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 6.5l8 6 8-6" fill="none" stroke="#fff" stroke-width="2"/></svg>'
   };
+  // 「邮箱」按钮的地址＝mailto:邮箱（bug#302，与后台 AdminMidpageConfigService 的校验同一口径：不带 ?subject= 等参数）
+  var MAILTO_RE = /^mailto:[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/i;
   function renderSlots(midcfg) {
     var box = el('slots'); box.innerHTML = '';
     var slots = (midcfg && midcfg.slots) || [];
     slots.forEach(function (s) {
-      if (!s || s.enabled === false || !s.url || !/^https:\/\//.test(s.url)) return; // 配了才显示
+      if (!s || s.enabled === false || !s.url) return; // 配了才显示
+      var mail = s.type === 'email' && MAILTO_RE.test(s.url);
+      if (!mail && !/^https:\/\//.test(s.url)) return;
       var a = document.createElement('a');
-      a.className = 'slot'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener';
+      a.className = 'slot'; a.href = s.url;
       a.innerHTML = (ICONS[s.type] || ICONS.home) + '<span>' + esc(s.label || '') + '</span>';
+      if (mail) {
+        // 不开新标签（mailto 开新标签会留一个空白页）。微信 / QQ 内置浏览器、没设邮件 App 的手机点了没反应 ⇒
+        // 地址直接显示在按钮上（截图也能留住），点击先复制再交给系统拉起邮件 App
+        var addr = s.url.slice('mailto:'.length);
+        a.innerHTML += '<span class="slot__addr">' + esc(addr) + '</span>';
+        a.addEventListener('click', function () { copyText(addr, function (ok) { toast(ok ? '已复制邮箱地址' : '请长按复制：' + addr); }); });
+      } else {
+        a.target = '_blank'; a.rel = 'noopener';
+      }
       box.appendChild(a);
     });
+  }
+
+  function copyText(text, done) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(legacyCopy(text)); });
+        return;
+      }
+    } catch (e) {}
+    done(legacyCopy(text));
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var t = el('toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2500);
   }
 
   function esc(s) {
